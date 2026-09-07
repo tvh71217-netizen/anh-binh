@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bảng Quản Lý & Tra Cứu</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 4px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        /* font-size 16px: iPhone chỉ tự phóng to màn hình khi ô nhập có chữ nhỏ hơn 16px.
+           Để đúng 16px là hết bị nhảy zoom mỗi lần bấm vào ô, mà vẫn chụm 2 ngón phóng to được. */
+        input, textarea, select { font-size: 16px !important; }
+        input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; min-width: 120px; }
+        button { padding: 10px 15px; cursor: pointer; border: none; border-radius: 4px; color: white; }
+        .btn-add { background: #27ae60; }
+        .btn-clear { background: #e74c3c; }
+        .btn-export { background: #8e44ad; }
+        .btn-import { background: #2980b9; }
+        /* Khung cuộn ngang: 4 cột Mã/Giá/Gợi ý/Ảnh hiện sẵn, cột Sửa/Xoá nằm khuất bên phải,
+           vuốt ngang mới hiện ra — tránh bấm nhầm nút Xoá khi đang tra cứu cho khách. */
+        .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
+        .scroll-hint { font-size: 12px; color: #999; margin: 12px 0 0; }
+        table { width: 100%; min-width: 470px; table-layout: fixed; border-collapse: collapse; }
+        col.c-ma    { width: 100px; }
+        /* Cột Mã luôn in đậm và in hoa, kể cả dữ liệu cũ đã lưu bằng chữ thường */
+        #tableBody td:first-child { font-weight: 700; text-transform: uppercase; }
+        #newCode { text-transform: uppercase; }
+        col.c-gia   { width: 100px; }
+        col.c-goiy  { width: 105px; }
+        col.c-anh   { width: 62px; }
+        col.c-hd    { width: 103px; }
+        th, td { padding: 10px 8px; border-bottom: 1px solid #eee; text-align: left; word-break: break-word; vertical-align: middle; }
+        th { background-color: #f8f8f8; }
+        .btn-edit-row { background: #3498db; font-size: 12px; padding: 5px 8px; margin-right: 5px; }
+        .btn-del-row { background: #e67e22; font-size: 12px; padding: 5px 8px; }
+        .file-io { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        /* Modal xác nhận */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-box {
+            background: white; padding: 24px; border-radius: 8px; max-width: 320px; text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .modal-box p { margin-bottom: 18px; font-size: 15px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: center; }
+        .btn-yes { background: #e74c3c; }
+        .btn-no { background: #95a5a6; }
+
+        /* Thanh tiêu đề + menu thu gọn */
+        .app-header {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; margin-bottom: 12px;
+        }
+        .btn-menu { background: #34495e; white-space: nowrap; }
+        .menu-panel { display: none; }
+        .menu-panel.open { display: block; }
+
+        /* Ảnh sản phẩm */
+        .thumb {
+            width: 48px; height: 48px; object-fit: cover; border-radius: 4px;
+            border: 1px solid #ddd; cursor: pointer; background: #fafafa;
+        }
+        .no-img { color: #bbb; }
+        .img-view-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); align-items: center; justify-content: center; z-index: 200;
+            flex-direction: column;
+        }
+        .img-view-overlay.active { display: flex; }
+        .img-view-overlay img { max-width: 92%; max-height: 78%; border-radius: 6px; }
+        .img-view-overlay p { color: #fff; margin-top: 14px; font-size: 15px; }
+
+        @media (max-width: 600px) {
+            body { padding: 8px; }
+            .container { padding: 10px; }
+            th, td { padding: 6px 4px; font-size: 13px; }
+            .thumb { width: 40px; height: 40px; }
+            .btn-edit-row, .btn-del-row { padding: 4px 6px; margin: 0 2px 2px 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="app-header">
+            <h2 style="margin:0;">Quản Lý Dữ Liệu</h2>
+            <button class="btn-menu" id="menuBtn" onclick="toggleMenu()">☰ Menu</button>
+        </div>
+
+        <div id="menuPanel" class="menu-panel">
+
+        <div class="section">
+            <strong>Xuất / Nhập dữ liệu (để dùng trên thiết bị khác)</strong>
+            <div class="file-io" style="margin-top:10px;">
+                <button class="btn-export" onclick="exportData()">⬇ Xuất file (JSON)</button>
+                <button class="btn-import" onclick="document.getElementById('importFile').click()">⬆ Nhập file (JSON)</button>
+                <button class="btn-import" style="background:#16a085;" onclick="openManualPasteBox()">📋 Dán dữ liệu thủ công</button>
+                <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+            </div>
+        </div>
+
+        <div class="section">
+            <strong>Ảnh sản phẩm</strong>
+            <p style="font-size:13px; color:#666; margin:8px 0;">
+                Để ảnh trong 1 thư mục (cùng chỗ với file này, hoặc link web/Drive công khai).
+                App sẽ tự ghép: <em>thư mục ảnh + tên mã</em>. Mã nào tên file khác thì dán "Link ảnh riêng" cho mã đó.
+            </p>
+            <div class="controls">
+                <input type="text" id="imgBaseInput" placeholder="Thư mục ảnh, ví dụ: anh/">
+                <button class="btn-add" onclick="saveImgBase()">Lưu thư mục</button>
+                <button class="btn-import" onclick="showImgFileNames()">📄 Xem tên file ảnh</button>
+            </div>
+        </div>
+        </div>
+
+
+        <div class="section">
+            <div class="controls">
+                <input type="text" id="newCode" placeholder="Mã">
+                <input type="text" id="newPrice" placeholder="Giá">
+                <input type="text" id="newSugg" placeholder="Gợi ý">
+                <input type="text" id="newImg" placeholder="Link ảnh riêng (bỏ trống nếu dùng ảnh tự ghép)">
+            </div>
+            <button class="btn-add" id="actionBtn" onclick="saveData()">Thêm dữ liệu</button>
+        </div>
+
+        <div class="section">
+            <div class="controls">
+                <input type="text" id="searchInput" placeholder="Tìm kiếm theo từ khoá..." onkeyup="filterTable()">
+                <button class="btn-clear" onclick="clearSearch()">Xoá từ khoá</button>
+            </div>
+        </div>
+
+
+        <p class="scroll-hint">Vuốt ngang bảng để hiện nút Sửa / Xoá</p>
+        <div class="table-wrap">
+        <table id="lookupTable">
+            <colgroup>
+                <col class="c-ma"><col class="c-gia"><col class="c-goiy"><col class="c-anh"><col class="c-hd">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Mã</th>
+                    <th>Giá</th>
+                    <th>Gợi ý</th>
+                    <th>Ảnh</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+        </div>
+    </div>
+
+    <!-- Modal xác nhận xoá -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal-box">
+            <p id="confirmMessage">Bạn có chắc muốn xoá dòng này?</p>
+            <div class="modal-actions">
+                <button class="btn-yes" onclick="confirmYes()">Có</button>
+                <button class="btn-no" onclick="confirmNo()">Không</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Xem ảnh lớn -->
+    <div class="img-view-overlay" id="imgViewModal" onclick="closeImgModal()">
+        <img id="imgViewBig" src="" alt="">
+        <p id="imgViewCaption"></p>
+        <div class="modal-actions" style="margin-top:6px;">
+            <button class="btn-add" id="copyImgBtn" onclick="copyImgToClipboard(event)">📋 Sao chép ảnh</button>
+            <button class="btn-no" onclick="closeImgModal()">Đóng</button>
+        </div>
+        <p style="font-size:13px; color:#bbb;">(Bấm ra ngoài để đóng)</p>
+    </div>
+
+    <!-- Modal sao chép thủ công (dùng khi trình duyệt không hỗ trợ Chia sẻ/tải file) -->
+    <div class="modal-overlay" id="manualCopyModal">
+        <div class="modal-box" style="max-width: 90%; width: 500px;">
+            <p id="manualCopyTitle" style="font-weight:bold;">Dữ liệu</p>
+            <p style="font-size:13px; color:#666;">Ô bên dưới đã tự chọn sẵn toàn bộ nội dung. Bấm "Sao chép" rồi dán (paste) vào Zalo/Ghi chú để lưu hoặc gửi sang máy khác.</p>
+            <textarea id="manualCopyArea" readonly style="width:100%; height:200px; margin:10px 0; padding:8px; font-family:monospace; font-size:12px; border:1px solid #ddd; border-radius:4px;"></textarea>
+            <div class="modal-actions">
+                <button class="btn-import" onclick="copyManualBox()">Sao chép</button>
+                <button class="btn-no" onclick="closeManualCopyBox()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal dán dữ liệu thủ công (dùng khi không chọn được file JSON để nhập) -->
+    <div class="modal-overlay" id="manualPasteModal">
+        <div class="modal-box" style="max-width: 90%; width: 500px;">
+            <p style="font-weight:bold;">Dán dữ liệu vào đây</p>
+            <p style="font-size:13px; color:#666;">Dán (paste) nội dung JSON đã copy từ máy kia vào ô bên dưới, rồi bấm "Nhập dữ liệu".</p>
+            <textarea id="manualPasteArea" style="width:100%; height:200px; margin:10px 0; padding:8px; font-family:monospace; font-size:12px; border:1px solid #ddd; border-radius:4px;" placeholder='[{"code":"...","price":"...","sugg":"...","img":"..."}]'></textarea>
+            <div class="modal-actions">
+                <button class="btn-add" onclick="importManualPaste()">Nhập dữ liệu</button>
+                <button class="btn-no" onclick="closeManualPasteBox()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dữ liệu được tự động lưu vào bộ nhớ máy (localStorage) mỗi khi có thay đổi,
+        // để khi tắt/mở lại trang không bị mất dữ liệu.
+        // Nút "Xuất file" / "Nhập file" / "Dán dữ liệu thủ công" dùng để mang dữ liệu sang thiết bị khác.
+        let currentEditRow = null;
+        let rowPendingDelete = null;
+        let currentImgUrl = "";
+
+        window.onload = function () {
+            document.getElementById("imgBaseInput").value = getImgBase();
+            try {
+                let data = JSON.parse(localStorage.getItem("myBatteryData") || "[]");
+                if (Array.isArray(data)) {
+                    data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || "", false));
+                }
+            } catch (e) {
+                // Không đọc được dữ liệu cũ — bỏ qua, coi như bảng trống.
+            }
+        };
+
+        // Sửa lỗi: khi chuyển sang app khác (Zalo, Ghi chú...) rồi quay lại,
+        // một số trình duyệt trên điện thoại (đặc biệt Safari/iOS) sẽ tự động
+        // focus lại vào ô input đang được chọn trước đó và cuộn trang lên để
+        // hiện ô đó ra, khiến trang có cảm giác "tự nhảy lên thanh tìm kiếm".
+        // Đoạn code dưới đây chủ động bỏ focus (blur) khỏi mọi ô input ngay khi
+        // trang bị ẩn đi, để khi quay lại trang không còn ô nào giữ focus nữa.
+        document.addEventListener("visibilitychange", function () {
+            if (document.hidden && document.activeElement && typeof document.activeElement.blur === "function") {
+                document.activeElement.blur();
+            }
+        });
+        window.addEventListener("pagehide", function () {
+            if (document.activeElement && typeof document.activeElement.blur === "function") {
+                document.activeElement.blur();
+            }
+        });
+
+        // Menu thu gọn: gom mục Xuất/Nhập dữ liệu và Ảnh sản phẩm vào 1 nút cho gọn màn hình
+        function toggleMenu() {
+            let panel = document.getElementById("menuPanel");
+            let btn = document.getElementById("menuBtn");
+            panel.classList.toggle("open");
+            btn.textContent = panel.classList.contains("open") ? "✕ Đóng menu" : "☰ Menu";
+        }
+
+        // ================= PHẦN ẢNH =================
+        // Cách hoạt động: mỗi mã sẽ có 1 ảnh. Tên file ảnh được tự sinh ra từ tên mã
+        // (bỏ dấu tiếng Việt, thay khoảng trắng bằng dấu gạch ngang, thêm .jpg).
+        // Ví dụ: "DK df40al (40ah, 35ah)" -> "dk-df40al-40ah-35ah.jpg"
+        // Đường dẫn cuối cùng = [thư mục ảnh] + [tên file]. Nếu mã nào có "Link ảnh riêng"
+        // thì dùng link đó, không ghép tự động nữa.
+
+        function getImgBase() {
+            return localStorage.getItem("myBatteryImgBase") || "anh/";
+        }
+
+        function saveImgBase() {
+            let base = document.getElementById("imgBaseInput").value.trim();
+            if (base && !base.endsWith("/")) base += "/";
+            localStorage.setItem("myBatteryImgBase", base);
+            document.getElementById("imgBaseInput").value = base;
+            refreshAllImages();
+            alert("Đã lưu thư mục ảnh: " + (base || "(cùng thư mục với file này)"));
+        }
+
+        // Các đuôi file ảnh app sẽ tự thử lần lượt (iPhone hay lưu .jpeg, máy tính hay .jpg)
+        const IMG_EXTS = [".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG", ".webp"];
+
+        // Chuyển tên mã thành tên file an toàn, CHƯA có đuôi (không dấu, không ký tự lạ)
+        function codeToStem(code) {
+            let s = (code || "").toLowerCase();
+            s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // bỏ dấu
+            s = s.replace(/đ/g, "d");
+            s = s.replace(/[^a-z0-9]+/g, "-");   // ký tự lạ -> gạch ngang
+            s = s.replace(/^-+|-+$/g, "");       // bỏ gạch thừa đầu/cuối
+            return s;
+        }
+
+        function codeToFileName(code) {
+            return codeToStem(code) + ".jpg";
+        }
+
+        // Lấy danh sách đường dẫn ảnh có thể có của 1 dòng (thử lần lượt cho tới khi ra ảnh)
+        function getImgUrlList(code, customLink) {
+            let custom = (customLink || "").trim();
+            if (custom) return [custom];
+            let base = getImgBase() + codeToStem(code);
+            return IMG_EXTS.map(function (e) { return base + e; });
+        }
+
+        // Vẽ ô ảnh cho 1 dòng (ô thứ 4). Thử lần lượt từng đuôi file cho tới khi có ảnh.
+        function renderImgCell(row) {
+            let td = row.cells[3];
+            let code = row.cells[0].textContent;
+            let list = getImgUrlList(code, row.dataset.img);
+            let i = 0;
+            td.innerHTML = "";
+
+            let dash = document.createElement("span");
+            dash.className = "no-img";
+            dash.textContent = "–";
+            dash.style.display = "none";
+
+            let im = document.createElement("img");
+            im.className = "thumb";
+            im.alt = code;
+            im.loading = "lazy";
+            im.onerror = function () {
+                i++;
+                if (i < list.length) {
+                    im.src = list[i];          // hết .jpg thì thử .jpeg, rồi .png...
+                } else {
+                    im.style.display = "none"; // thử hết mà không có thì hiện dấu –
+                    dash.style.display = "inline";
+                }
+            };
+            im.onload = function () { row.dataset.loadedImg = im.src; };
+            im.onclick = function () { openImgModal(im.src, code); };
+            im.src = list[0];
+
+            td.appendChild(im);
+            td.appendChild(dash);
+        }
+
+        function refreshAllImages() {
+            document.querySelectorAll("#tableBody tr").forEach(renderImgCell);
+        }
+
+        function openImgModal(url, caption) {
+            currentImgUrl = url;
+            let cb = document.getElementById("copyImgBtn");
+            if (cb) cb.textContent = "📋 Sao chép ảnh";
+            document.getElementById("imgViewBig").src = url;
+            document.getElementById("imgViewCaption").textContent = caption || "";
+            document.getElementById("imgViewModal").classList.add("active");
+        }
+
+        function closeImgModal() {
+            document.getElementById("imgViewModal").classList.remove("active");
+            document.getElementById("imgViewBig").src = "";
+        }
+
+        // Tải ảnh về rồi vẽ lại thành file PNG "sạch" (chỉ có ảnh, không kèm địa chỉ web)
+        function urlToPngBlob(url) {
+            return new Promise(function (resolve, reject) {
+                let im = new Image();
+                im.crossOrigin = "anonymous";
+                im.onload = function () {
+                    let c = document.createElement("canvas");
+                    c.width = im.naturalWidth;
+                    c.height = im.naturalHeight;
+                    c.getContext("2d").drawImage(im, 0, 0);
+                    c.toBlob(function (b) {
+                        b ? resolve(b) : reject(new Error("Không tạo được ảnh"));
+                    }, "image/png");
+                };
+                im.onerror = function () { reject(new Error("Không tải được ảnh")); };
+                im.src = url;
+            });
+        }
+
+        // Sao chép CHỈ tấm ảnh vào bộ nhớ tạm, để dán vào Zalo không bị kèm dòng link
+        async function copyImgToClipboard(ev) {
+            if (ev) ev.stopPropagation();
+            if (!currentImgUrl) return;
+
+            if (!navigator.clipboard || !window.ClipboardItem) {
+                alert("Trình duyệt này chưa hỗ trợ sao chép ảnh.\nAnh bấm chuột phải vào ảnh → \"Sao chép hình ảnh\" nhé.");
+                return;
+            }
+
+            try {
+                let item = new ClipboardItem({ "image/png": urlToPngBlob(currentImgUrl) });
+                await navigator.clipboard.write([item]);
+                // Không hiện hộp thông báo nữa — chỉ đổi chữ trên nút trong 1,5 giây cho biết đã copy
+                let btn = document.getElementById("copyImgBtn");
+                if (btn) {
+                    btn.textContent = "✅ Đã sao chép";
+                    setTimeout(function () { btn.textContent = "📋 Sao chép ảnh"; }, 1500);
+                }
+            } catch (err) {
+                alert("Không sao chép được ảnh.\nAnh bấm chuột phải vào ảnh → \"Sao chép hình ảnh\" (trên điện thoại thì nhấn giữ ảnh → Sao chép).");
+            }
+        }
+
+        // Liệt kê tên file ảnh cần chuẩn bị cho từng mã
+        function showImgFileNames() {
+            let rows = document.querySelectorAll("#tableBody tr");
+            if (rows.length === 0) { alert("Chưa có dữ liệu nào!"); return; }
+            let lines = ["THƯ MỤC ẢNH: " + (getImgBase() || "(cùng thư mục file này)"), "Đuôi file dùng được: .jpg .jpeg .png .webp (app tự dò)", ""];
+            rows.forEach(row => {
+                let code = row.cells[0].textContent;
+                let custom = (row.dataset.img || "").trim();
+                lines.push(code + "  →  " + (custom ? custom + "   (link riêng)" : codeToStem(code) + ".jpg"));
+            });
+            showManualCopyBox(lines.join("\n"), "danh-sach-ten-file-anh.txt");
+        }
+        // =============== HẾT PHẦN ẢNH ===============
+
+        // Lưu toàn bộ bảng hiện tại vào localStorage
+        function saveToLocalStorage() {
+            let data = [];
+            let rows = document.querySelectorAll("#tableBody tr");
+            rows.forEach(row => {
+                data.push({
+                    code: row.cells[0].textContent,
+                    price: row.cells[1].textContent,
+                    sugg: row.cells[2].textContent,
+                    img: row.dataset.img || ""
+                });
+            });
+            try {
+                localStorage.setItem("myBatteryData", JSON.stringify(data));
+            } catch (e) {
+                console.error("Không lưu được vào localStorage:", e);
+            }
+        }
+
+        function saveData() {
+            // Mã luôn lưu dưới dạng CHỮ HOA, gõ thường cũng tự đổi
+            let code = document.getElementById("newCode").value.trim().toUpperCase();
+            let price = document.getElementById("newPrice").value;
+            let sugg = document.getElementById("newSugg").value;
+            let img = document.getElementById("newImg").value.trim();
+
+            if (!code || !price) {
+                alert("Vui lòng nhập Mã và Giá!");
+                return;
+            }
+
+            if (currentEditRow) {
+                currentEditRow.cells[0].textContent = code;
+                currentEditRow.cells[1].textContent = price;
+                currentEditRow.cells[2].textContent = sugg;
+                currentEditRow.dataset.img = img;
+                renderImgCell(currentEditRow);
+                document.getElementById("actionBtn").textContent = "Thêm dữ liệu";
+                currentEditRow = null;
+            } else {
+                addRow(code, price, sugg, img);
+            }
+
+            document.getElementById("newCode").value = "";
+            document.getElementById("newPrice").value = "";
+            document.getElementById("newSugg").value = "";
+            document.getElementById("newImg").value = "";
+
+            saveToLocalStorage();
+        }
+
+        function addRow(code, price, sugg, img = "", doSave = true) {
+            let tbody = document.getElementById("tableBody");
+            let row = tbody.insertRow();
+            row.innerHTML = `<td></td><td></td><td></td><td></td><td><button class="btn-edit-row" onclick="editRow(this)">Sửa</button><button class="btn-del-row" onclick="askDeleteRow(this)">Xoá</button></td>`;
+            row.cells[0].textContent = code;
+            row.cells[1].textContent = price;
+            row.cells[2].textContent = sugg;
+            row.dataset.img = img || "";
+            renderImgCell(row);
+            if (doSave) saveToLocalStorage();
+        }
+
+        function editRow(btn) {
+            let row = btn.parentNode.parentNode;
+            document.getElementById("newCode").value = row.cells[0].textContent;
+            document.getElementById("newPrice").value = row.cells[1].textContent;
+            document.getElementById("newSugg").value = row.cells[2].textContent;
+            document.getElementById("newImg").value = row.dataset.img || "";
+            document.getElementById("actionBtn").textContent = "Cập nhật dữ liệu";
+            currentEditRow = row;
+        }
+
+        // Bước 1: mở modal xác nhận thay vì xoá ngay
+        function askDeleteRow(btn) {
+            rowPendingDelete = btn.parentNode.parentNode;
+            let code = rowPendingDelete.cells[0].textContent;
+            document.getElementById("confirmMessage").textContent = `Bạn có chắc muốn xoá dòng "${code}"?`;
+            document.getElementById("confirmModal").classList.add("active");
+        }
+
+        function confirmYes() {
+            if (rowPendingDelete) {
+                rowPendingDelete.remove();
+                rowPendingDelete = null;
+                saveToLocalStorage();
+            }
+            closeModal();
+        }
+
+        function confirmNo() {
+            rowPendingDelete = null;
+            closeModal();
+        }
+
+        function closeModal() {
+            document.getElementById("confirmModal").classList.remove("active");
+        }
+
+        function filterTable() {
+            let filter = document.getElementById("searchInput").value.toLowerCase();
+            let rows = document.getElementById("tableBody").getElementsByTagName("tr");
+            for (let row of rows) {
+                row.style.display = row.textContent.toLowerCase().indexOf(filter) > -1 ? "" : "none";
+            }
+        }
+
+        function clearSearch() {
+            document.getElementById("searchInput").value = "";
+            filterTable();
+        }
+
+        // Xuất toàn bộ bảng ra file JSON
+        async function exportData() {
+            let data = [];
+            let rows = document.querySelectorAll("#tableBody tr");
+            rows.forEach(row => {
+                data.push({
+                    code: row.cells[0].textContent,
+                    price: row.cells[1].textContent,
+                    sugg: row.cells[2].textContent,
+                    img: row.dataset.img || ""
+                });
+            });
+
+            if (data.length === 0) {
+                alert("Không có dữ liệu để xuất!");
+                return;
+            }
+
+            let dateStr = new Date().toISOString().slice(0, 10);
+            let fileName = `du-lieu-${dateStr}.json`;
+            let jsonText = JSON.stringify(data, null, 2);
+            let file = new File([jsonText], fileName, { type: "application/json" });
+
+            // Ưu tiên dùng hộp thoại Chia sẻ của điện thoại (đáng tin cậy hơn trên iPhone)
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: "Dữ liệu bảng quản lý"
+                    });
+                    return;
+                } catch (err) {
+                    // Người dùng bấm huỷ chia sẻ, hoặc lỗi -> thử cách khác bên dưới
+                    if (err.name === "AbortError") return;
+                }
+            }
+
+            // Cách dự phòng: sao chép vào clipboard để dán lưu thủ công
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                try {
+                    await navigator.clipboard.writeText(jsonText);
+                    alert("Trình duyệt này không hỗ trợ chia sẻ file trực tiếp.\nMình đã sao chép nội dung JSON vào bộ nhớ tạm (clipboard) — bạn hãy dán vào 1 ứng dụng Ghi chú/Zalo, lưu thành file .json.");
+                    return;
+                } catch (err) {
+                    // tiếp tục xuống cách cuối cùng
+                }
+            }
+
+            // Cách cuối cùng, luôn hoạt động dù trình duyệt hạn chế:
+            // hiện dữ liệu ra ô văn bản để người dùng tự chọn và sao chép bằng tay
+            showManualCopyBox(jsonText, fileName);
+        }
+
+        // Hiện ô văn bản chứa dữ liệu JSON để copy thủ công (dùng khi mọi cách khác đều không hỗ trợ)
+        function showManualCopyBox(text, fileName) {
+            document.getElementById("manualCopyTitle").textContent = `Dữ liệu (${fileName})`;
+            document.getElementById("manualCopyArea").value = text;
+            document.getElementById("manualCopyModal").classList.add("active");
+            // Tự chọn sẵn toàn bộ nội dung để người dùng chỉ cần bấm Sao chép
+            setTimeout(() => {
+                let area = document.getElementById("manualCopyArea");
+                area.focus();
+                area.select();
+            }, 100);
+        }
+
+        function copyManualBox() {
+            let area = document.getElementById("manualCopyArea");
+            area.select();
+            try {
+                document.execCommand("copy");
+                alert("Đã sao chép! Giờ bạn dán (paste) vào Ghi chú, Zalo... để lưu hoặc gửi sang máy khác.");
+            } catch (err) {
+                alert("Không tự copy được, bạn hãy chọn toàn bộ chữ trong ô rồi copy bằng tay (nhấn giữ → Chọn tất cả → Sao chép).");
+            }
+        }
+
+        function closeManualCopyBox() {
+            document.getElementById("manualCopyModal").classList.remove("active");
+        }
+
+        function openManualPasteBox() {
+            document.getElementById("manualPasteArea").value = "";
+            document.getElementById("manualPasteModal").classList.add("active");
+        }
+
+        function closeManualPasteBox() {
+            document.getElementById("manualPasteModal").classList.remove("active");
+        }
+
+        function importManualPaste() {
+            let text = document.getElementById("manualPasteArea").value.trim();
+            if (!text) {
+                alert("Bạn chưa dán dữ liệu nào!");
+                return;
+            }
+            try {
+                let data = JSON.parse(text);
+                if (!Array.isArray(data)) throw new Error("Định dạng không hợp lệ");
+
+                let tbody = document.getElementById("tableBody");
+                tbody.innerHTML = "";
+                data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || ""));
+                closeManualPasteBox();
+                alert(`Đã nhập ${data.length} dòng dữ liệu thành công!`);
+            } catch (err) {
+                alert("Nội dung dán vào không đúng định dạng JSON. Hãy kiểm tra lại và dán đầy đủ nội dung đã sao chép.");
+            }
+        }
+
+        // Nhập dữ liệu từ file JSON đã xuất trước đó (trên thiết bị khác)
+        function importData(event) {
+            let file = event.target.files[0];
+            if (!file) return;
+
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    let data = JSON.parse(e.target.result);
+                    if (!Array.isArray(data)) throw new Error("Định dạng không hợp lệ");
+
+                    let tbody = document.getElementById("tableBody");
+                    tbody.innerHTML = "";
+                    data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || ""));
+                    alert(`Đã nhập ${data.length} dòng dữ liệu thành công!`);
+                } catch (err) {
+                    alert("File không hợp lệ hoặc bị lỗi định dạng!");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = "";
+        }
+    </script>
+</body>
+</html>
