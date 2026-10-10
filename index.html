@@ -76,6 +76,47 @@
         .img-view-overlay img { max-width: 92%; max-height: 78%; border-radius: 6px; }
         .img-view-overlay p { color: #fff; margin-top: 14px; font-size: 15px; }
 
+        /* Giá bấm được: bấm vào từng giá để hiện câu báo giá */
+        .price-link {
+            color: #2980b9; text-decoration: underline; cursor: pointer;
+            white-space: nowrap; padding: 2px 0; -webkit-tap-highlight-color: rgba(41,128,185,0.25);
+        }
+        .sentence-text {
+            font-size: 17px; font-weight: 600; line-height: 1.5; margin: 6px 0 16px;
+            padding: 12px; background: #f4f7f6; border-radius: 6px; text-align: left;
+            -webkit-user-select: text; user-select: text;
+        }
+        .btn-toggle { background: #34495e; white-space: nowrap; }
+
+        /* Hộp báo giá nhiều dòng: mỗi dòng sửa được; số (2),(4)... chỉ để xem, không bị copy */
+        .quote-list { margin: 8px 0 10px; max-height: 50vh; overflow-y: auto; }
+        .quote-list:empty::before { content: "Chưa có dòng nào. Đóng hộp này rồi bấm vào giá để thêm."; color: #999; font-size: 14px; }
+        .quote-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
+        .quote-row textarea {
+            flex: 1; min-width: 0; padding: 8px; font-family: inherit; font-size: 16px; font-weight: 600;
+            line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #f4f7f6;
+            resize: none; overflow: hidden;
+        }
+        .quote-tag {
+            min-width: 26px; padding-top: 8px; color: #e67e22; font-weight: bold; font-size: 16px;
+            -webkit-user-select: none; user-select: none; pointer-events: none;
+        }
+        .quote-del { border: none; background: transparent; color: #c0392b; font-size: 20px; padding: 4px 6px; cursor: pointer; }
+        .quote-float {
+            display: none; position: fixed; right: 14px; bottom: 18px; z-index: 150;
+            padding: 12px 16px; border: none; border-radius: 24px; background: #16a085; color: #fff;
+            font-size: 15px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer;
+        }
+        .quote-float.show { display: block; }
+        .quote-float.bump { animation: quoteBump 0.3s ease; }
+        @keyframes quoteBump { 50% { transform: scale(1.25); } }
+
+        /* Ẩn cột Gợi ý (cột thứ 3) */
+        #lookupTable.hide-sugg { min-width: 365px; }
+        #lookupTable.hide-sugg col.c-goiy,
+        #lookupTable.hide-sugg th:nth-child(3),
+        #lookupTable.hide-sugg td:nth-child(3) { display: none; }
+
         @media (max-width: 600px) {
             body { padding: 8px; }
             .container { padding: 10px; }
@@ -127,6 +168,7 @@
                 <input type="text" id="newPrice" placeholder="Giá">
                 <input type="text" id="newSugg" placeholder="Gợi ý">
                 <input type="text" id="newImg" placeholder="Link ảnh riêng (nhiều ảnh thì cách nhau bằng dấu phẩy)">
+                <input type="text" id="newSize" placeholder="Cỡ để báo giá (không bắt buộc), ví dụ: Din60 hoặc 45">
             </div>
             <button class="btn-add" id="actionBtn" onclick="saveData()">Thêm dữ liệu</button>
         </div>
@@ -135,11 +177,12 @@
             <div class="controls">
                 <input type="text" id="searchInput" placeholder="Tìm kiếm theo từ khoá..." onkeyup="filterTable()">
                 <button class="btn-clear" onclick="clearSearch()">Xoá từ khoá</button>
+                <button class="btn-toggle" id="toggleSuggBtn" onclick="toggleSugg()">🙈 Ẩn gợi ý</button>
             </div>
         </div>
 
 
-        <p class="scroll-hint">Vuốt ngang bảng để hiện nút Sửa / Xoá</p>
+        <p class="scroll-hint">Bấm vào nhiều giá để gom câu báo giá (nút góc nhảy số), mở nút đó để copy 1 lần • Vuốt ngang bảng để hiện nút Sửa / Xoá</p>
         <div class="table-wrap">
         <table id="lookupTable">
             <colgroup>
@@ -169,6 +212,22 @@
             </div>
         </div>
     </div>
+
+    <!-- Hộp báo giá: gom nhiều giá vào 1 chỗ, copy 1 lần gửi khách -->
+    <div class="modal-overlay" id="sentenceModal" onclick="closeSentenceModal()">
+        <div class="modal-box" style="max-width: 90%; width: 440px;" onclick="event.stopPropagation()">
+            <p style="font-weight:bold; margin-bottom:2px;">Danh sách báo giá <span id="quoteCount" style="color:#888; font-weight:normal;"></span></p>
+            <p style="font-size:13px; color:#888; margin:0;">Gõ sửa trực tiếp được. Số màu cam (2), (4)... chỉ để xem, không bị copy.</p>
+            <div class="quote-list" id="quoteList"></div>
+            <div class="modal-actions">
+                <button class="btn-import" id="copySentenceBtn" onclick="copySentence()">📋 Sao chép tất cả</button>
+                <button class="btn-add" onclick="addBlankQuote()">＋ Thêm dòng</button>
+                <button class="btn-no" onclick="clearQuotes()">🗑 Xoá hết</button>
+                <button class="btn-no" onclick="closeSentenceModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
+    <button class="quote-float" id="quoteFloatBtn" onclick="openQuoteBox()">📋 Báo giá (<span id="quoteFloatCount">0</span>)</button>
 
     <!-- Xem ảnh lớn -->
     <div class="img-view-overlay" id="imgViewModal" onclick="closeImgModal()">
@@ -221,11 +280,12 @@
         let currentImgUrl = "";
 
         window.onload = function () {
+            applySuggVisibility();
             document.getElementById("imgBaseInput").value = getImgBase();
             try {
                 let data = JSON.parse(localStorage.getItem("myBatteryData") || "[]");
                 if (Array.isArray(data)) {
-                    data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || "", false));
+                    data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || "", false, item.size || ""));
                 }
             } catch (e) {
                 // Không đọc được dữ liệu cũ — bỏ qua, coi như bảng trống.
@@ -256,6 +316,326 @@
             panel.classList.toggle("open");
             btn.textContent = panel.classList.contains("open") ? "✕ Đóng menu" : "☰ Menu";
         }
+
+        // ================= PHẦN GIÁ → CÂU BÁO GIÁ =================
+        // Bấm vào từng giá trong cột Giá sẽ hiện ra câu báo giá tương ứng, ví dụ:
+        //   VT 56030, giá "1.680 db"  ->  "Varta Din60ah giá 1.680.000 đổi bình cũ"
+        // - Giá có chữ "db" (hàng K): thêm "đổi bình cũ" cuối câu.
+        // - Giá thường (hàng L): chỉ có giá.
+        // - Hàng G có 3 giá (giá thường, 2%, 4%): cả 3 giá đều bấm được, mỗi giá ra 1 câu riêng.
+        // Tên hãng lấy theo 2 chữ đầu của mã (BO, VT, DK, RK, GS, SL).
+        // Cỡ (Din60, 45...) lấy theo thứ tự: ô "Cỡ để báo giá" của dòng đó -> bảng SIZE_TABLE bên dưới
+        // -> nếu mã chưa có trong bảng thì đoán từ ô Gợi ý (bỏ chữ K/L/G đầu).
+        const BRAND_NAMES = { BO: "Bosch", VT: "Varta", DK: "Delkor", RK: "Rocket", GS: "GS", SL: "Solite" };
+
+        const SIZE_TABLE = {
+            "BO 40B19L": "35",
+            "BO 55B19L": "41",
+            "BO 55B24L": "45",
+            "BO 55B24LS": "45",
+            "BO 55D23L": "60",
+            "BO 75D23L": "65",
+            "BO Q85": "Q85 (65ah)",
+            "BO 80D26R": "70",
+            "BO 80D26L": "70",
+            "BO 90D26L": "75",
+            "BO 105D31R": "90",
+            "BO 105D31L": "90",
+            "BO 95E41R": "100",
+            "BO 115F51L": "120",
+            "BO 145G51L": "150",
+            "BO 190H52L": "200",
+            "BO 545.042": "Din45",
+            "BO 562.051": "Din62",
+            "BO 575.068": "Din75",
+            "BO 580.073": "Din80",
+            "BO 600.085": "Din100",
+            "BO 610.092": "Din110",
+            "VT 65B24L": "50",
+            "VT 65B24LS": "50",
+            "VT 80D23L": "65",
+            "VT Q85 (65AH)": "Q85 (65ah)",
+            "VT Q85 (70AH)": "Q85 (70ah)",
+            "VT 80D26L": "70",
+            "VT 100D26L": "75",
+            "VT 56030": "Din60",
+            "VT 56090": "Din60",
+            "VT 57539": "Din75",
+            "VT 59043": "Din90",
+            "VT 60044": "Din100",
+            "VT AGM LN2": "VT Agm Ln2",
+            "VT AGM LN3": "VT Agm Ln3",
+            "VT AGM LN4": "VT Agm Ln4",
+            "VT AGM LN5": "VT Agm Ln5",
+            "VT AGM LN6": "VT Agm Ln6",
+            "DK DF40AL": "40",
+            "DK 55B24L": "46",
+            "DK 55B24LS": "46",
+            "DK 65B24RS": "50",
+            "DK 60D23L": "60",
+            "DK 80D23L": "65",
+            "DK Q85": "Q85 (65ah)",
+            "DK DF70L": "70",
+            "DK 100D26L": "75",
+            "DK 120D31L": "90",
+            "DK 120D31R": "90",
+            "DK 1111K": "100",
+            "DK 1110K": "100",
+            "DK DIN45R": "Din45",
+            "DK 55066": "Din50",
+            "DK 56030": "Din60",
+            "DK 56031": "Din60",
+            "DK 56077": "Din60",
+            "DK 56530": "Din65",
+            "DK 57539": "Din75",
+            "DK 58024": "Din80",
+            "DK 59043": "Din90",
+            "DK 60038": "Din100",
+            "RK 44B19L": "42",
+            "RK 44B19L (K ĐẾ)": "42",
+            "RK 65B24L": "50",
+            "RK 65B24LS": "50",
+            "RK 65B24RS": "50",
+            "RK NX110-5 (R)": "70",
+            "RK NX110-5L": "70",
+            "RK NX110-5ZL": "75",
+            "RK 105D31 (R)": "94",
+            "RK 105D31L": "94",
+            "RK 54464 (R)": "Din44",
+            "RK 55066": "Din50",
+            "RK 56220": "Din62",
+            "RK 57113": "Din71",
+            "RK 57820": "Din78",
+            "RK 58014": "Din80",
+            "RK 59042": "Din90",
+            "RK 60044": "Din100",
+            "RK 61042": "Din110",
+            "RK Q90": "Q90 (73ah)",
+            "GS 40B19L": "35",
+            "GS 44B19L": "40",
+            "GS 46B24L": "45",
+            "GS 46B24LS": "45",
+            "GS 46B24R": "45",
+            "GS 55D23L": "60",
+            "GS 75D23L": "65",
+            "GS Q85": "Q85 (65ah)",
+            "GS 80D26L": "70",
+            "GS 85D26L": "75",
+            "GS 95D31L": "80",
+            "GS 105D31L": "90",
+            "GS 115D33C": "100",
+            "GS DIN45": "Din45",
+            "GS DIN60": "Din60",
+            "GS DIN70": "Din70",
+            "GS DIN80": "Din80",
+            "SL 42B19L": "38",
+            "SL 50B19L": "40",
+            "SL 55B24L": "45",
+            "SL 55B24LS": "45",
+            "SL 65D23L": "60",
+            "SL 75D23L": "65",
+            "SL N100": "100",
+            "SL 100R": "100",
+            "SL 54316": "Din43",
+            "SL 55016": "Din50",
+            "SL 55559": "Din55",
+            "SL 56219": "Din62",
+            "SL 57113": "Din71",
+            "SL 58014": "Din80",
+            "SL 59042": "Din90",
+            "SL 60038": "Din100"
+};
+
+        function normCode(code) {
+            return (code || "").replace(/\s+/g, " ").trim().toUpperCase();
+        }
+
+        // Đổi giá trị trong bảng thành chữ hiện trong câu: 45 -> "45ah", Din60 -> "Din60ah",
+        // còn dạng "Q85 (65ah)" hoặc "Agm Ln2" thì giữ nguyên
+        function sizeToLabel(v) {
+            v = (v || "").trim().replace(/^(BO|VT|DK|RK|GS|SL)\s+/i, "");
+            if (/^\d+$/.test(v)) return v + "ah";
+            if (/^din\s*\d+$/i.test(v)) return "Din" + v.replace(/\D/g, "") + "ah";
+            return v;
+        }
+
+        // Đoán cỡ từ ô Gợi ý khi mã chưa có trong bảng: "Kd60, Kd62" -> Din60ah; "L45ah, L50ah" -> 45ah
+        function sizeFromSugg(sugg) {
+            let first = (sugg || "").split(",")[0].trim().replace(/^[KLG](?=[a-z0-9])/i, "");
+            if (/^d\d+/i.test(first)) return "Din" + first.match(/\d+/)[0] + "ah";
+            if (/^\d+$/.test(first)) return first + "ah";
+            if (/^\d+ah$/i.test(first)) return first.toLowerCase();
+            return first ? first.charAt(0).toUpperCase() + first.slice(1) : "";
+        }
+
+        function getSizeLabel(row) {
+            let override = (row.dataset.size || "").trim();
+            if (override) return sizeToLabel(override);
+            let key = normCode(row.cells[0].textContent);
+            if (SIZE_TABLE[key]) return sizeToLabel(SIZE_TABLE[key]);
+            return sizeFromSugg(row.cells[2].textContent);
+        }
+
+        // "1.680" -> "1.680.000"; "920" -> "920.000"
+        function formatFullPrice(val) {
+            let n = parseInt(String(val).replace(/\./g, ""), 10) * 1000;
+            return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        }
+
+        function buildSentence(row, val, isDb) {
+            let code = normCode(row.cells[0].textContent);
+            let prefix = code.split(" ")[0];
+            let brand = BRAND_NAMES[prefix] || "";
+            let rest = brand ? code.slice(prefix.length).trim() : code;
+            let label = getSizeLabel(row) || rest;
+            let s = [brand, label, "giá", formatFullPrice(val)].filter(Boolean).join(" ");
+            return isDb ? s + " đổi bình cũ" : s;
+        }
+
+        // Vẽ ô Giá: mỗi giá (kể cả dạng "2%1.610" hay "1.680 db") thành 1 chữ bấm được.
+        // Chữ trong ô giữ nguyên 100% như người dùng đã nhập nên lưu/xuất dữ liệu không bị đổi.
+        function renderPriceCell(row, text) {
+            let td = row.cells[1];
+            text = text || "";
+            td.textContent = "";
+            let re = /(\d+%)?(\d{1,3}(?:\.\d{3})+|\d{3,4})(\s*db\b)?/gi;
+            let last = 0, m;
+            while ((m = re.exec(text)) !== null) {
+                if (m.index > last) td.appendChild(document.createTextNode(text.slice(last, m.index)));
+                let span = document.createElement("span");
+                span.className = "price-link";
+                span.textContent = m[0];
+                span.dataset.val = m[2];
+                span.dataset.pct = m[1] ? m[1].replace("%", "") : "";
+                span.dataset.db = m[3] ? "1" : "";
+                td.appendChild(span);
+                last = m.index + m[0].length;
+            }
+            if (last < text.length) td.appendChild(document.createTextNode(text.slice(last)));
+        }
+
+        document.getElementById("tableBody").addEventListener("click", function (ev) {
+            let el = ev.target.closest ? ev.target.closest(".price-link") : null;
+            if (!el) return;
+            addQuote(el.closest("tr"), el.dataset.val, el.dataset.db === "1", el.dataset.pct);
+        });
+
+        // Bấm 1 giá -> KHÔNG mở hộp, chỉ thêm 1 dòng và nút góc màn hình nhảy số.
+        // Bấm nút góc để mở hộp xem/sửa, rồi "Sao chép tất cả" 1 lần gửi khách.
+        // Giá của hàng G có % (2%1.150...) -> hộp hiện thêm số (2) cuối câu, chỉ để xem, không copy.
+        function quoteRows() { return Array.prototype.slice.call(document.querySelectorAll("#quoteList .quote-row")); }
+        // Giữ nguyên chữ người dùng gõ (kể cả xuống dòng đầu/cuối ô) để copy ra đúng như trong hộp;
+        // chỉ bỏ qua những ô hoàn toàn trống.
+        function rowText(r) { return r.querySelector("textarea").value; }
+        function quoteTexts() { return quoteRows().map(rowText).filter(function (t) { return t.trim() !== ""; }); }
+
+        function autoGrow(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }
+
+        function makeQuoteRow(text, tag) {
+            let r = document.createElement("div");
+            r.className = "quote-row";
+            r.dataset.tag = tag || "";
+            let ta = document.createElement("textarea");
+            ta.rows = 1;
+            ta.value = text;
+            ta.addEventListener("input", function () { autoGrow(ta); updateQuoteCount(); });
+            let t = document.createElement("span");
+            t.className = "quote-tag";
+            t.textContent = tag ? "(" + tag + ")" : "";
+            let d = document.createElement("button");
+            d.className = "quote-del";
+            d.textContent = "✕";
+            d.onclick = function () { r.remove(); updateQuoteCount(); };
+            r.appendChild(ta); r.appendChild(t); r.appendChild(d);
+            return r;
+        }
+
+        function updateQuoteCount() {
+            let n = quoteTexts().length;
+            let open = document.getElementById("sentenceModal").classList.contains("active");
+            document.getElementById("quoteCount").textContent = n ? "(" + n + " dòng)" : "";
+            document.getElementById("quoteFloatCount").textContent = n;
+            document.getElementById("quoteFloatBtn").classList.toggle("show", n > 0 && !open);
+        }
+
+        function addQuote(row, val, isDb, pct) {
+            let text = buildSentence(row, val, isDb);
+            let dup = quoteRows().some(function (r) { return rowText(r).trim() === text && r.dataset.tag === (pct || ""); });
+            if (!dup) {
+                let list = document.getElementById("quoteList");
+                let r = makeQuoteRow(text, pct || "");
+                list.appendChild(r);
+                autoGrow(r.querySelector("textarea"));
+            }
+            updateQuoteCount();
+            let fb = document.getElementById("quoteFloatBtn");
+            fb.classList.remove("bump"); void fb.offsetWidth; fb.classList.add("bump");
+        }
+
+        function addBlankQuote() {
+            let r = makeQuoteRow("", "");
+            document.getElementById("quoteList").appendChild(r);
+            r.querySelector("textarea").focus();
+            updateQuoteCount();
+        }
+
+        function openQuoteBox() {
+            document.getElementById("copySentenceBtn").textContent = "📋 Sao chép tất cả";
+            document.getElementById("sentenceModal").classList.add("active");
+            quoteRows().forEach(function (r) { autoGrow(r.querySelector("textarea")); });
+            updateQuoteCount();
+        }
+
+        function closeSentenceModal() {
+            document.getElementById("sentenceModal").classList.remove("active");
+            updateQuoteCount();
+        }
+
+        function clearQuotes() {
+            document.getElementById("quoteList").innerHTML = "";
+            closeSentenceModal();
+        }
+
+        async function copySentence() {
+            let btn = document.getElementById("copySentenceBtn");
+            let text = quoteTexts().join("\n");
+            if (!text) { btn.textContent = "Chưa có dòng nào"; return; }
+            let ok = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    ok = true;
+                }
+            } catch (e) { /* thử cách dự phòng bên dưới */ }
+            if (!ok) {
+                let ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+                document.body.removeChild(ta);
+            }
+            btn.textContent = ok ? "✅ Đã sao chép" : "Không copy được, thử lại";
+            if (ok) setTimeout(function () { btn.textContent = "📋 Sao chép tất cả"; }, 1500);
+        }
+
+        // ================= ẨN / HIỆN CỘT GỢI Ý =================
+        // Trạng thái nhớ trong localStorage (khoá myBatteryHideSugg) nên mở lại app vẫn giữ nguyên
+        function applySuggVisibility() {
+            let hidden = localStorage.getItem("myBatteryHideSugg") === "1";
+            document.getElementById("lookupTable").classList.toggle("hide-sugg", hidden);
+            document.getElementById("toggleSuggBtn").textContent = hidden ? "👁 Hiện gợi ý" : "🙈 Ẩn gợi ý";
+        }
+
+        function toggleSugg() {
+            let hidden = localStorage.getItem("myBatteryHideSugg") === "1";
+            localStorage.setItem("myBatteryHideSugg", hidden ? "0" : "1");
+            applySuggVisibility();
+        }
+        // =============== HẾT PHẦN GIÁ / GỢI Ý ===============
 
         // ================= PHẦN ẢNH =================
         // Cách hoạt động: mỗi mã sẽ có 1 ảnh đại diện hiện trong bảng. Tên file ảnh được
@@ -544,7 +924,8 @@
                     code: row.cells[0].textContent,
                     price: row.cells[1].textContent,
                     sugg: row.cells[2].textContent,
-                    img: row.dataset.img || ""
+                    img: row.dataset.img || "",
+                    size: row.dataset.size || ""
                 });
             });
             try {
@@ -560,6 +941,7 @@
             let price = document.getElementById("newPrice").value;
             let sugg = document.getElementById("newSugg").value;
             let img = document.getElementById("newImg").value.trim();
+            let size = document.getElementById("newSize").value.trim();
 
             if (!code || !price) {
                 alert("Vui lòng nhập Mã và Giá!");
@@ -568,32 +950,35 @@
 
             if (currentEditRow) {
                 currentEditRow.cells[0].textContent = code;
-                currentEditRow.cells[1].textContent = price;
+                renderPriceCell(currentEditRow, price);
                 currentEditRow.cells[2].textContent = sugg;
                 currentEditRow.dataset.img = img;
+                currentEditRow.dataset.size = size;
                 renderImgCell(currentEditRow);
                 document.getElementById("actionBtn").textContent = "Thêm dữ liệu";
                 currentEditRow = null;
             } else {
-                addRow(code, price, sugg, img);
+                addRow(code, price, sugg, img, true, size);
             }
 
             document.getElementById("newCode").value = "";
             document.getElementById("newPrice").value = "";
             document.getElementById("newSugg").value = "";
             document.getElementById("newImg").value = "";
+            document.getElementById("newSize").value = "";
 
             saveToLocalStorage();
         }
 
-        function addRow(code, price, sugg, img = "", doSave = true) {
+        function addRow(code, price, sugg, img = "", doSave = true, size = "") {
             let tbody = document.getElementById("tableBody");
             let row = tbody.insertRow();
             row.innerHTML = `<td></td><td></td><td></td><td></td><td><button class="btn-edit-row" onclick="editRow(this)">Sửa</button><button class="btn-del-row" onclick="askDeleteRow(this)">Xoá</button></td>`;
             row.cells[0].textContent = code;
-            row.cells[1].textContent = price;
+            renderPriceCell(row, price);
             row.cells[2].textContent = sugg;
             row.dataset.img = img || "";
+            row.dataset.size = size || "";
             renderImgCell(row);
             if (doSave) saveToLocalStorage();
         }
@@ -604,6 +989,7 @@
             document.getElementById("newPrice").value = row.cells[1].textContent;
             document.getElementById("newSugg").value = row.cells[2].textContent;
             document.getElementById("newImg").value = row.dataset.img || "";
+            document.getElementById("newSize").value = row.dataset.size || "";
             document.getElementById("actionBtn").textContent = "Cập nhật dữ liệu";
             currentEditRow = row;
         }
@@ -656,7 +1042,8 @@
                     code: row.cells[0].textContent,
                     price: row.cells[1].textContent,
                     sugg: row.cells[2].textContent,
-                    img: row.dataset.img || ""
+                    img: row.dataset.img || "",
+                    size: row.dataset.size || ""
                 });
             });
 
@@ -749,7 +1136,7 @@
 
                 let tbody = document.getElementById("tableBody");
                 tbody.innerHTML = "";
-                data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || ""));
+                data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || "", true, item.size || ""));
                 closeManualPasteBox();
                 alert(`Đã nhập ${data.length} dòng dữ liệu thành công!`);
             } catch (err) {
@@ -770,7 +1157,7 @@
 
                     let tbody = document.getElementById("tableBody");
                     tbody.innerHTML = "";
-                    data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || ""));
+                    data.forEach(item => addRow(item.code || "", item.price || "", item.sugg || "", item.img || "", true, item.size || ""));
                     alert(`Đã nhập ${data.length} dòng dữ liệu thành công!`);
                 } catch (err) {
                     alert("File không hợp lệ hoặc bị lỗi định dạng!");
