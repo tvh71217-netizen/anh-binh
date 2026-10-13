@@ -482,6 +482,13 @@
             return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
         }
 
+        // Số tháng bảo hành theo 2 chữ đầu của mã. Mã khác (GS...) mặc định 6 tháng.
+        const WARRANTY_MONTHS = { DK: 9, VT: 9, RK: 9, SL: 9, BO: 12 };
+        function warrantyMonths(row) {
+            let prefix = normCode(row.cells[0].textContent).split(" ")[0];
+            return WARRANTY_MONTHS[prefix] || 6;
+        }
+
         function buildSentence(row, val, isDb) {
             let code = normCode(row.cells[0].textContent);
             let prefix = code.split(" ")[0];
@@ -531,14 +538,24 @@
 
         function autoGrow(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }
 
-        function makeQuoteRow(text, tag) {
+        function makeQuoteRow(text, tag, months) {
             let r = document.createElement("div");
             r.className = "quote-row";
             r.dataset.tag = tag || "";
+            r.dataset.months = months || "";
             let ta = document.createElement("textarea");
             ta.rows = 1;
             ta.value = text;
-            ta.addEventListener("input", function () { autoGrow(ta); updateQuoteCount(); });
+            ta.addEventListener("input", function (ev) {
+                // Bấm xuống dòng ở cuối ô -> tự hiện "bảo hành N tháng" (chỉ 1 lần mỗi ô)
+                if (ev.inputType === "insertLineBreak" && r.dataset.months &&
+                    ta.selectionStart === ta.value.length && ta.value.slice(-1) === "\n" &&
+                    ta.value.toLowerCase().indexOf("bảo hành") === -1) {
+                    ta.value += "bảo hành " + r.dataset.months + " tháng";
+                    ta.setSelectionRange(ta.value.length, ta.value.length);
+                }
+                autoGrow(ta); updateQuoteCount();
+            });
             let t = document.createElement("span");
             t.className = "quote-tag";
             t.textContent = tag ? "(" + tag + ")" : "";
@@ -563,7 +580,7 @@
             let dup = quoteRows().some(function (r) { return rowText(r).trim() === text && r.dataset.tag === (pct || ""); });
             if (!dup) {
                 let list = document.getElementById("quoteList");
-                let r = makeQuoteRow(text, pct || "");
+                let r = makeQuoteRow(text, pct || "", warrantyMonths(row));
                 list.appendChild(r);
                 autoGrow(r.querySelector("textarea"));
             }
