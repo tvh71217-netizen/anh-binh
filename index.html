@@ -278,7 +278,7 @@
         let currentEditRow = null;
         let rowPendingDelete = null;
         let currentImgUrl = "";
-        let activePct = ""; // % chiết khấu đang lọc khi tìm (vd "gd60 2" -> "2")
+        let activePct = null; // null = không tìm; "" = tìm không gõ 2/4 (chỉ giá không ck); "2"/"4" = giá ck tương ứng
 
         window.onload = function () {
             applySuggVisibility();
@@ -523,7 +523,7 @@
                 last = m.index + m[0].length;
             }
             if (last < text.length) td.appendChild(document.createTextNode(text.slice(last)));
-            if (activePct) applyPriceFilter(row, activePct);
+            if (activePct !== null) applyPriceFilter(row, activePct);
         }
 
         document.getElementById("tableBody").addEventListener("click", function (ev) {
@@ -1055,30 +1055,29 @@
             return { tokens: tokens, pct: pct };
         }
 
-        // Ẩn/hiện từng giá trong ô Giá của 1 hàng theo % đang lọc ("" = hiện hết).
-        // Trả về true nếu hàng có giá khớp % (hoặc không đang lọc %).
+        // pct === null  : không tìm kiếm -> hiện đủ giá.
+        // pct === ""    : đang tìm, không gõ 2/4 -> chỉ hiện giá không chiết khấu.
+        // pct === "2"/"4": chỉ hiện giá chiết khấu đó.
+        // Hàng không có đúng loại giá cần hiện (vd hàng không có ck) -> giữ nguyên, hiện đủ giá.
         function applyPriceFilter(row, pct) {
             let td = row.cells[1];
-            if (!td) return true;
+            if (!td) return;
             let spans = td.querySelectorAll(".price-link");
-            let found = false;
+            let has = pct !== null && Array.prototype.some.call(spans, function (sp) { return sp.dataset.pct === pct; });
             spans.forEach(function (sp) {
-                let show = !pct || sp.dataset.pct === pct;
-                sp.style.display = show ? "" : "none";
-                if (show && pct) found = true;
+                sp.style.display = (!has || sp.dataset.pct === pct) ? "" : "none";
             });
-            return !pct || found;
         }
 
         function filterTable() {
             let q = parseSearch(document.getElementById("searchInput").value);
-            activePct = q.pct;
+            activePct = q.tokens.length ? q.pct : null;
             let rows = document.getElementById("tableBody").getElementsByTagName("tr");
             for (let row of rows) {
                 let text = row.textContent.toLowerCase();
                 let match = q.tokens.every(function (t) { return text.indexOf(t) > -1; });
-                let hasPct = applyPriceFilter(row, q.pct);
-                row.style.display = (match && hasPct) ? "" : "none";
+                applyPriceFilter(row, activePct);
+                row.style.display = match ? "" : "none";
             }
         }
 
