@@ -278,6 +278,7 @@
         let currentEditRow = null;
         let rowPendingDelete = null;
         let currentImgUrl = "";
+        let activePct = ""; // % chiết khấu đang lọc khi tìm (vd "gd60 2" -> "2")
 
         window.onload = function () {
             applySuggVisibility();
@@ -522,6 +523,7 @@
                 last = m.index + m[0].length;
             }
             if (last < text.length) td.appendChild(document.createTextNode(text.slice(last)));
+            if (activePct) applyPriceFilter(row, activePct);
         }
 
         document.getElementById("tableBody").addEventListener("click", function (ev) {
@@ -1040,11 +1042,43 @@
             document.getElementById("confirmModal").classList.remove("active");
         }
 
+        // Tìm kiếm: nhiều từ khoá (cách nhau bằng dấu cách) phải khớp hết.
+        // Nếu từ cuối là 2 / 4 (hoặc 2% / 4%) và đứng sau ít nhất 1 từ khoá khác
+        // (vd "gd60 2") -> chỉ hiện giá chiết khấu tương ứng, ẩn các giá còn lại.
+        function parseSearch(raw) {
+            let tokens = raw.toLowerCase().split(/\s+/).filter(Boolean);
+            let pct = "";
+            if (tokens.length >= 2) {
+                let m = tokens[tokens.length - 1].match(/^([24])%?$/);
+                if (m) { pct = m[1]; tokens.pop(); }
+            }
+            return { tokens: tokens, pct: pct };
+        }
+
+        // Ẩn/hiện từng giá trong ô Giá của 1 hàng theo % đang lọc ("" = hiện hết).
+        // Trả về true nếu hàng có giá khớp % (hoặc không đang lọc %).
+        function applyPriceFilter(row, pct) {
+            let td = row.cells[1];
+            if (!td) return true;
+            let spans = td.querySelectorAll(".price-link");
+            let found = false;
+            spans.forEach(function (sp) {
+                let show = !pct || sp.dataset.pct === pct;
+                sp.style.display = show ? "" : "none";
+                if (show && pct) found = true;
+            });
+            return !pct || found;
+        }
+
         function filterTable() {
-            let filter = document.getElementById("searchInput").value.toLowerCase();
+            let q = parseSearch(document.getElementById("searchInput").value);
+            activePct = q.pct;
             let rows = document.getElementById("tableBody").getElementsByTagName("tr");
             for (let row of rows) {
-                row.style.display = row.textContent.toLowerCase().indexOf(filter) > -1 ? "" : "none";
+                let text = row.textContent.toLowerCase();
+                let match = q.tokens.every(function (t) { return text.indexOf(t) > -1; });
+                let hasPct = applyPriceFilter(row, q.pct);
+                row.style.display = (match && hasPct) ? "" : "none";
             }
         }
 
